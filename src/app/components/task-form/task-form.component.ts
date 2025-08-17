@@ -1,7 +1,8 @@
-import { Component, Output, EventEmitter } from "@angular/core"
+import { Component, Output, EventEmitter, ViewChild } from "@angular/core"
 import { CommonModule } from "@angular/common"
-import { FormsModule } from "@angular/forms"
+import { FormsModule, NgForm } from "@angular/forms"
 import { TaskService } from "../../services/task.service"
+import { AIService } from "../../services/ai.service"
 import type { Task, TaskCreateRequest } from "../../models/task.model"
 
 @Component({
@@ -13,7 +14,7 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
       <h2 class="text-xl font-semibold">Add New Task</h2>
       
       <form (ngSubmit)="onSubmit()" #taskForm="ngForm">
-         Title 
+        <!-- Title -->
         <div class="space-y-2">
           <label for="title" class="block text-sm font-medium">Task Title *</label>
           <input 
@@ -26,7 +27,7 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
             placeholder="Enter task title">
         </div>
 
-         Description 
+        <!-- Description -->
         <div class="space-y-2">
           <label for="description" class="block text-sm font-medium">Description *</label>
           <textarea 
@@ -39,7 +40,7 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
             placeholder="Describe your task..."></textarea>
         </div>
 
-         Due Date 
+        <!-- Due Date -->
         <div class="space-y-2">
           <label for="dueDate" class="block text-sm font-medium">Due Date *</label>
           <input 
@@ -51,7 +52,7 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
             class="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
         </div>
 
-         File Upload 
+        <!-- File Upload -->
         <div class="space-y-2">
           <label for="file" class="block text-sm font-medium">Attachment (Optional)</label>
           <input 
@@ -65,7 +66,7 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
           </p>
         </div>
 
-         Language Selector 
+        <!-- Language Selector -->
         <div class="space-y-2">
           <label for="language" class="block text-sm font-medium">Force Language (Optional)</label>
           <select 
@@ -89,13 +90,113 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
           </p>
         </div>
 
-         Actions 
+        <!-- Translation Test -->
+        <div class="space-y-2">
+          <label class="block text-sm font-medium">Test Translation</label>
+          <div class="flex gap-2">
+            <input 
+              type="text" 
+              name="translationText"
+              [(ngModel)]="translationText"
+              placeholder="Enter text to translate"
+              class="flex-1 px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+            <select 
+              name="targetLanguage"
+              [(ngModel)]="targetLanguage"
+              class="px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="it">Italian</option>
+              <option value="pt">Portuguese</option>
+              <option value="ja">Japanese</option>
+              <option value="ko">Korean</option>
+              <option value="zh">Chinese</option>
+            </select>
+            <button 
+              type="button"
+              (click)="testTranslation()"
+              [disabled]="isTranslating"
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {{ isTranslating ? 'Translating...' : 'Translate' }}
+            </button>
+          </div>
+          <div *ngIf="translatedText" class="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+            <p class="text-sm text-green-800">
+              <strong>Translation:</strong> {{ translatedText }}
+            </p>
+          </div>
+          <div *ngIf="translationError" class="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+            <p class="text-sm text-red-800">{{ translationError }}</p>
+          </div>
+        </div>
+
+        <!-- Audio Reminder Settings -->
+        <div class="space-y-2">
+          <label class="block text-sm font-medium">Audio Reminder Settings</label>
+          <div class="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="enableAudioReminder"
+              name="enableAudioReminder"
+              [(ngModel)]="enableAudioReminder"
+              (change)="onAudioReminderToggle()"
+              class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary">
+            <label for="enableAudioReminder" class="text-sm text-gray-700">
+              Generate audio reminder for this task
+            </label>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            When enabled, an audio reminder will be generated from your task details and played on the due date.
+          </p>
+          <div *ngIf="enableAudioReminder && audioReminderUrl" class="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+            <p class="text-sm text-green-800 mb-2">
+              <strong>Audio Reminder Generated:</strong>
+            </p>
+            <audio controls class="w-full" preload="metadata" (error)="onAudioError($event)" (loadedmetadata)="onAudioLoaded()">
+              <source [src]="audioReminderUrl" type="audio/mpeg">
+              <source [src]="audioReminderUrl" type="audio/wav">
+              <source [src]="audioReminderUrl" type="audio/ogg">
+              Your browser does not support the audio element.
+            </audio>
+            <div class="mt-2 flex gap-2">
+              <button 
+                type="button"
+                (click)="playAudioReminder()"
+                class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors">
+                Play Reminder
+              </button>
+              <button 
+                type="button"
+                (click)="testAudioUrl()"
+                class="px-3 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700 transition-colors">
+                Test URL
+              </button>
+            </div>
+            <p class="text-xs text-gray-600 mt-1">
+              This reminder will play automatically on {{ dueDateString | date:'mediumDate' }}
+            </p>
+            <p class="text-xs text-blue-600 mt-1">
+              Audio URL: <a [href]="audioReminderUrl" target="_blank" class="underline">{{ audioReminderUrl }}</a>
+            </p>
+          </div>
+          <div *ngIf="audioError" class="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+            <p class="text-sm text-red-800">{{ audioError }}</p>
+          </div>
+        </div>
+
+        <!-- Error Display -->
+        <div *ngIf="errorMessage" class="bg-red-50 border border-red-200 rounded-md p-3">
+          <p class="text-red-800 text-sm">{{ errorMessage }}</p>
+        </div>
+
+        <!-- Actions -->
         <div class="flex gap-3 pt-4">
           <button 
             type="submit"
             [disabled]="!taskForm.form.valid || isSubmitting"
             class="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            {{ isSubmitting ? 'Creating...' : 'Create Task' }}
+            {{ isSubmitting ? 'Analyzing with AI...' : 'Create Task' }}
           </button>
           <button 
             type="button"
@@ -111,6 +212,7 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
 export class TaskFormComponent {
   @Output() taskCreated = new EventEmitter<void>()
   @Output() cancelled = new EventEmitter<void>()
+  @ViewChild('taskForm') taskForm!: NgForm
 
   task: TaskCreateRequest = {
     title: "",
@@ -121,8 +223,24 @@ export class TaskFormComponent {
 
   dueDateString = ""
   isSubmitting = false
+  errorMessage = ""
+  translationText = ""
+  targetLanguage = "es"
+  translatedText = ""
+  translationError = ""
+  isTranslating = false
+  audioText = ""
+  audioLanguage = "en"
+  audioUrl = ""
+  audioError = ""
+  isGeneratingAudio = false
+  enableAudioReminder = false
+  audioReminderUrl = ""
 
-  constructor(private taskService: TaskService) {
+  constructor(
+    private taskService: TaskService,
+    private aiService: AIService
+  ) {
     // Set default due date to tomorrow
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
@@ -136,57 +254,327 @@ export class TaskFormComponent {
       this.task.file = file
     }
   }
-/*
-  onSubmit(): void {
-    if (this.isSubmitting) return
 
-    this.isSubmitting = true
-    this.task.dueDate = new Date(this.dueDateString)
+  testTranslation(): void {
+    if (!this.translationText.trim() || this.isTranslating) return
 
-    // In a real app, this would call the API
-    // For now, we'll simulate the API call
-    setTimeout(() => {
-      console.log("Creating task:", this.task)
-      this.taskCreated.emit()
-      this.resetForm()
-      this.isSubmitting = false
-    }, 1000)
+    this.isTranslating = true
+    this.translationError = ""
+    this.translatedText = ""
+
+    this.aiService.translateText(this.translationText, this.targetLanguage)
+      .subscribe({
+        next: (result) => {
+          this.translatedText = result.translatedText
+          console.log('Translation result:', result)
+          this.isTranslating = false
+        },
+        error: (error) => {
+          console.error('Translation error:', error)
+          this.translationError = "Translation failed. Please try again."
+          this.isTranslating = false
+        }
+      })
   }
-   */
-  
+
+  generateAudio(): void {
+    if (!this.audioText.trim() || this.isGeneratingAudio) return
+
+    this.isGeneratingAudio = true
+    this.audioError = ""
+    this.audioUrl = ""
+
+    this.aiService.generateAudio(this.audioText, this.audioLanguage)
+      .subscribe({
+        next: (result) => {
+          this.audioUrl = result.audioUrl
+          console.log('Audio generation result:', result)
+          console.log('Generated audio URL:', this.audioUrl)
+          this.isGeneratingAudio = false
+        },
+        error: (error) => {
+          console.error('Audio generation error:', error)
+          this.audioError = "Audio generation failed. Please try again."
+          this.isGeneratingAudio = false
+        }
+      })
+  }
+
+  playAudio(): void {
+    if (!this.audioUrl) {
+      this.audioError = "No audio available to play"
+      return
+    }
+
+    this.audioError = ""
+    console.log('Attempting to play audio from:', this.audioUrl)
+    
+    const audio = new Audio(this.audioUrl)
+    
+    audio.addEventListener('loadstart', () => {
+      console.log('Audio loading started')
+    })
+    
+    audio.addEventListener('loadeddata', () => {
+      console.log('Audio data loaded successfully')
+    })
+    
+    audio.addEventListener('canplay', () => {
+      console.log('Audio is ready to play')
+    })
+    
+    audio.addEventListener('error', (e: any) => {
+      console.error('Audio loading error:', e)
+      const target = e.target as HTMLAudioElement
+      let errorMessage = "Failed to load audio file"
+      
+      switch (target.error?.code) {
+        case MediaError.MEDIA_ERR_ABORTED:
+          errorMessage = "Audio loading was aborted"
+          break
+        case MediaError.MEDIA_ERR_NETWORK:
+          errorMessage = "Network error while loading audio"
+          break
+        case MediaError.MEDIA_ERR_DECODE:
+          errorMessage = "Audio file is corrupted or unsupported"
+          break
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+          errorMessage = "Audio format not supported"
+          break
+      }
+      
+      this.audioError = errorMessage
+    })
+
+    audio.play()
+      .then(() => {
+        console.log('Audio started playing successfully')
+      })
+      .catch(error => {
+        console.error('Audio playback error:', error)
+        
+        if (error.name === 'NotAllowedError') {
+          this.audioError = "Audio blocked by browser. Please ensure you clicked a button to play."
+        } else if (error.name === 'NotSupportedError') {
+          this.audioError = "Audio format not supported by this browser."
+        } else if (error.name === 'AbortError') {
+          this.audioError = "Audio playback was interrupted."
+        } else {
+          this.audioError = `Audio playback failed: ${error.message}`
+        }
+      })
+  }
+
+  private generateReminderText(): string {
+    // Use the selected date from calendar (dueDateString) instead of task.dueDate
+    const selectedDate = new Date(this.dueDateString)
+    const formattedDate = selectedDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+    
+    console.log('Selected date string:', this.dueDateString)
+    console.log('Formatted due date:', formattedDate)
+         
+    return `Reminder: Your task "${this.task?.title || 'Untitled'}" is due today, ${formattedDate}. ${this.task?.description || ''}`
+  }
+
+  private generateAudioReminder(): void {
+    if (!this.enableAudioReminder) return
+
+    const reminderText = this.generateReminderText()
+         
+    this.aiService.generateAudio(reminderText, this.task?.forceLanguage || 'en')
+      .subscribe({
+        next: (result) => {
+          this.audioReminderUrl = result.audioUrl
+          console.log('Audio reminder generated:', result)
+          console.log('Audio reminder URL:', this.audioReminderUrl)
+        },
+        error: (error) => {
+          console.error('Error generating audio reminder:', error)
+          this.audioError = "Failed to generate audio reminder"
+        }
+      })
+  }
+
+  onAudioReminderToggle(): void {
+    if (this.enableAudioReminder) {
+      this.generateAudioReminder()
+    } else {
+      this.audioReminderUrl = ""
+      this.audioError = ""
+    }
+  }
+
+  playAudioReminder(): void {
+    if (!this.audioReminderUrl) {
+      this.audioError = "No audio reminder available to play"
+      return
+    }
+
+    this.audioError = ""
+    console.log('Attempting to play audio reminder from:', this.audioReminderUrl)
+    
+    const audio = new Audio(this.audioReminderUrl)
+    
+    audio.addEventListener('loadstart', () => {
+      console.log('Audio reminder loading started')
+    })
+    
+    audio.addEventListener('loadeddata', () => {
+      console.log('Audio reminder data loaded successfully')
+    })
+    
+    audio.addEventListener('canplay', () => {
+      console.log('Audio reminder is ready to play')
+    })
+    
+    audio.addEventListener('error', (e: any) => {
+      console.error('Audio reminder loading error:', e)
+      const target = e.target as HTMLAudioElement
+      let errorMessage = "Failed to load audio reminder"
+      
+      switch (target.error?.code) {
+        case MediaError.MEDIA_ERR_ABORTED:
+          errorMessage = "Audio reminder loading was aborted"
+          break
+        case MediaError.MEDIA_ERR_NETWORK:
+          errorMessage = "Network error while loading audio reminder"
+          break
+        case MediaError.MEDIA_ERR_DECODE:
+          errorMessage = "Audio reminder file is corrupted or unsupported"
+          break
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+          errorMessage = "Audio reminder format not supported"
+          break
+      }
+      
+      this.audioError = errorMessage
+    })
+
+    audio.play()
+      .then(() => {
+        console.log('Audio reminder started playing successfully')
+      })
+      .catch(error => {
+        console.error('Audio reminder playback error:', error)
+        
+        if (error.name === 'NotAllowedError') {
+          this.audioError = "Audio reminder blocked by browser. Please ensure you clicked a button to play."
+        } else if (error.name === 'NotSupportedError') {
+          this.audioError = "Audio reminder format not supported by this browser."
+        } else if (error.name === 'AbortError') {
+          this.audioError = "Audio reminder playback was interrupted."
+        } else {
+          this.audioError = `Audio reminder playback failed: ${error.message}`
+        }
+      })
+  }
+
+  onAudioError(event: any): void {
+    console.error('HTML5 Audio element error:', event)
+    this.audioError = "Audio controls failed to load the file. The URL may be invalid or the file format unsupported."
+  }
+
+  onAudioLoaded(): void {
+    console.log('HTML5 Audio element loaded successfully')
+    this.audioError = ""
+  }
+
+  testAudioUrl(): void {
+    if (!this.audioReminderUrl) return
+    
+    console.log('Testing audio URL:', this.audioReminderUrl)
+    
+    // Test if URL is accessible
+    fetch(this.audioReminderUrl, { method: 'HEAD' })
+      .then(response => {
+        console.log('Audio URL test response:', {
+          status: response.status,
+          contentType: response.headers.get('content-type'),
+          contentLength: response.headers.get('content-length')
+        })
+        
+        if (response.ok) {
+          this.audioError = `✅ URL accessible (${response.status}). Content-Type: ${response.headers.get('content-type') || 'unknown'}`
+        } else {
+          this.audioError = `❌ URL not accessible (${response.status})`
+        }
+      })
+      .catch(error => {
+        console.error('Audio URL test failed:', error)
+        this.audioError = `❌ URL test failed: ${error.message}`
+      })
+  }
+
   onSubmit(): void {
     if (this.isSubmitting) return
-  
+
     this.isSubmitting = true
     this.task.dueDate = new Date(this.dueDateString)
-  
-    // Create a new task object with AI metadata
-    const newTask: Task = {
-      id: Date.now().toString(), // Simple ID generation
-      title: this.task.title,
-      description: this.task.description,
-      status: "active",
-      dueDate: this.task.dueDate,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      hasAttachment: !!this.task.file,
-      aiMetadata: {
-        sentiment: "neutral", // Default values - would come from AI in real app
-        language: this.task.forceLanguage ? this.getLanguageName(this.task.forceLanguage) : "English",
-        languageCode: this.task.forceLanguage || "en",
-        category: this.detectCategory(this.task.title + " " + this.task.description),
-        urgencyLevel: this.detectUrgency(this.task.description),
-      },
-    }
-  
-    // Add the task to the service
-    setTimeout(() => {
-      this.taskService.addTask(newTask)
-      console.log("Task created:", newTask)
-      this.taskCreated.emit()
-      this.resetForm()
-      this.isSubmitting = false
-    }, 1000)
+    this.errorMessage = ""
+
+    const taskText = `${this.task.title} ${this.task.description}`
+    
+    this.aiService.analyzeText(taskText)
+      .subscribe({
+        next: (aiInsights) => {
+          const newTask: Task = {
+            id: Date.now().toString(),
+            title: this.task.title,
+            description: this.task.description,
+            status: "active",
+            dueDate: this.task.dueDate,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            hasAttachment: !!this.task.file,
+            aiMetadata: {
+              sentiment: aiInsights.sentiment,
+              language: aiInsights.language,
+              languageCode: aiInsights.languageCode,
+              category: aiInsights.category,
+              urgencyLevel: aiInsights.urgencyLevel,
+              audioReminderUrl: this.audioReminderUrl,
+              audioReminderText: this.generateReminderText(),
+            },
+          }
+
+          this.taskService.addTask(newTask)
+          console.log("Task created with AI insights:", newTask)
+          this.taskCreated.emit()
+          this.resetForm()
+          this.isSubmitting = false
+        },
+        error: (error) => {
+          console.error("Error creating task with AI analysis:", error)
+          this.errorMessage = "AI analysis failed. Creating task with default settings."
+          
+          const fallbackTask: Task = {
+            id: Date.now().toString(),
+            title: this.task.title,
+            description: this.task.description,
+            status: "active",
+            dueDate: this.task.dueDate,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            hasAttachment: !!this.task.file,
+            aiMetadata: {
+              sentiment: "neutral",
+              language: this.task.forceLanguage ? this.getLanguageName(this.task.forceLanguage) : "English",
+              languageCode: this.task.forceLanguage || "en",
+              category: this.detectCategory(this.task.title + " " + this.task.description),
+              urgencyLevel: this.detectUrgency(this.task.description),
+            },
+          }
+          this.taskService.addTask(fallbackTask)
+          this.taskCreated.emit()
+          this.resetForm()
+          this.isSubmitting = false
+        }
+      })
   }
   
   private getLanguageName(code: string): string {
@@ -235,5 +623,14 @@ export class TaskFormComponent {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
     this.dueDateString = tomorrow.toISOString().split("T")[0]
+    this.errorMessage = ""
+    this.translationText = ""
+    this.translatedText = ""
+    this.translationError = ""
+    this.audioText = ""
+    this.audioUrl = ""
+    this.audioError = ""
+    this.enableAudioReminder = false
+    this.audioReminderUrl = ""
   }
-}
+}  
