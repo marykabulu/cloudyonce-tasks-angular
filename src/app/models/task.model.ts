@@ -14,6 +14,8 @@ export interface Task {
       languageCode: string
       category?: string
       urgencyLevel?: "low" | "medium" | "high"
+      audioReminderUrl?: string
+      audioReminderText?: string
     }
   }
   
