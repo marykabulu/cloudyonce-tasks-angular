@@ -3,6 +3,7 @@ import { CommonModule } from "@angular/common"
 import { FormsModule, NgForm } from "@angular/forms"
 import { TaskService } from "../../services/task.service"
 import { AIService } from "../../services/ai.service"
+import { FileService } from "../../services/file.service"
 import type { Task, TaskCreateRequest } from "../../models/task.model"
 
 @Component({
@@ -52,7 +53,27 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
             class="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
         </div>
 
-        <!-- File Upload -->
+        <!-- File Upload Section -->
+        <!-- 
+          JUNIOR DEV EXPLANATION:
+          
+          This section handles file uploads and AI image analysis. Here's what happens step by step:
+          
+          1. USER SELECTS FILE: When user picks a file, the (change)="onFileSelected($event)" event fires
+          2. FILE UPLOAD: The selected file gets uploaded to AWS S3 (cloud storage) via our backend
+          3. S3 URL PARSING: Once uploaded, we get back an S3 URL like:
+             "https://my-bucket.s3.us-east-1.amazonaws.com/path/to/file.jpg"
+          4. BUCKET/KEY EXTRACTION: We parse this URL to extract:
+             - bucket: "my-bucket" (the S3 storage container name)
+             - key: "path/to/file.jpg" (the file's location within the bucket)
+          5. AI ANALYSIS: We send bucket + key to AWS Rekognition service to analyze the image
+          6. RESULTS DISPLAY: The detected labels (like "car", "building", "person") are shown below
+          
+          WHY THIS APPROACH?
+          - We can't send the actual file directly to Rekognition from the frontend
+          - Instead, we upload to S3 first, then tell Rekognition "analyze the file at this S3 location"
+          - This is a common pattern in AWS: upload → get URL → process with other services
+        -->
         <div class="space-y-2">
           <label for="file" class="block text-sm font-medium">Attachment (Optional)</label>
           <input 
@@ -65,6 +86,22 @@ import type { Task, TaskCreateRequest } from "../../models/task.model"
             Upload images, documents, or other files related to this task
           </p>
         </div>
+
+
+        <div *ngIf="imageLabels.length" class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+  <p class="text-sm text-blue-800 font-semibold">Detected Labels:</p>
+  <ul class="list-disc pl-5">
+    <li *ngFor="let label of imageLabels">
+      {{ label.Name }} ({{ label.Confidence }})
+    </li>
+  </ul>
+</div>
+
+<div *ngIf="imageAnalysisError" class="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+  <p class="text-sm text-red-800">{{ imageAnalysisError }}</p>
+</div>
+
+        
 
         <!-- Language Selector -->
         <div class="space-y-2">
@@ -237,9 +274,14 @@ export class TaskFormComponent {
   enableAudioReminder = false
   audioReminderUrl = ""
 
+  imageLabels: { Name: string; Confidence: string }[] = [];
+imageAnalysisError = "";
+
+
   constructor(
     private taskService: TaskService,
-    private aiService: AIService
+    private aiService: AIService,
+    private fileService: FileService
   ) {
     // Set default due date to tomorrow
     const tomorrow = new Date()
@@ -250,11 +292,112 @@ export class TaskFormComponent {
 
   onFileSelected(event: any): void {
     const file = event.target.files[0]
-    if (file) {
-      this.task.file = file
-    }
+    if (!file) return
+
+    this.task.file = file
+    this.imageLabels = []
+    this.imageAnalysisError = ""
+
+    // 1) Upload to S3 via backend, which returns a public/file URL
+    const tempTaskId = Date.now().toString()
+    this.fileService.uploadFile(file, tempTaskId).subscribe({
+      next: ({ fileUrl }) => {
+        // 2) Parse S3 URL into bucket/key for Rekognition
+        const parsed = this.parseS3UrlToBucketKey(fileUrl)
+        if (!parsed) {
+          this.imageAnalysisError = "Could not parse S3 URL"
+          return
+        }
+
+        // 3) Trigger AI image analysis using bucket/key
+        this.aiService.analyzeImage(parsed.bucket, parsed.key).subscribe({
+          next: (result: any) => {
+            // Lambda Proxy Integration wraps response in 'body' property
+            // Handle both string and object formats for flexibility
+            let labels: any[] = []
+            
+            if (result.body) {
+              // If body exists, parse it (could be string or object)
+              if (typeof result.body === 'string') {
+                try {
+                  const parsedBody = JSON.parse(result.body)
+                  labels = parsedBody.labels || []
+                } catch (parseError) {
+                  console.error('Failed to parse Lambda response body:', parseError)
+                  this.imageAnalysisError = "Invalid response format from AI service"
+                  return
+                }
+              } else {
+                // Body is already an object
+                labels = result.body.labels || []
+              }
+            } else {
+              // Direct response format (fallback)
+              labels = result.labels || []
+            }
+            
+            this.imageLabels = labels
+            console.log("Image labels:", this.imageLabels)
+          },
+          error: (error) => {
+            console.error("Image analysis failed:", error)
+            this.imageAnalysisError = "Failed to analyze image. Please try again."
+          },
+        })
+      },
+      error: (err) => {
+        console.error("File upload failed:", err)
+        this.imageAnalysisError = "Upload failed. Please try again."
+      },
+    })
   }
 
+  private parseS3UrlToBucketKey(url: string): { bucket: string; key: string } | null {
+    try {
+      // Examples of S3 URL formats:
+      // 
+      // WITH FOLDERS (nested structure):
+      // - https://my-bucket.s3.us-east-1.amazonaws.com/folder1/folder2/file.jpg
+      // - https://s3.amazonaws.com/my-bucket/folder1/folder2/file.jpg
+      // 
+      // WITHOUT FOLDERS (root level):
+      // - https://my-bucket.s3.us-east-1.amazonaws.com/file.jpg
+      // - https://s3.amazonaws.com/my-bucket/file.jpg
+      // 
+      // The 'key' will include the full path including folders, or just the filename if no folders
+      
+      const u = new URL(url)
+      const host = u.hostname
+      const pathname = u.pathname.startsWith("/") ? u.pathname.slice(1) : u.pathname
+
+      // Virtual-hosted–style: <bucket>.s3.<region>.amazonaws.com/<key>
+      // This handles: my-bucket.s3.us-east-1.amazonaws.com/folder/file.jpg
+      // Support both with-region and no-region hosts:
+      // - <bucket>.s3.us-east-1.amazonaws.com
+      // - <bucket>.s3.amazonaws.com
+      const virtualHostMatch = host.match(/^([^.]+)\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/)
+      if (virtualHostMatch) {
+        const bucket = virtualHostMatch[1]
+        // key will be: "folder/file.jpg" (with folders) or "file.jpg" (without folders)
+        const key = decodeURIComponent(pathname)
+        return { bucket, key }
+      }
+
+      // Path-style: s3.amazonaws.com/<bucket>/<key> or s3-<region>.amazonaws.com/<bucket>/<key>
+      // This handles: s3.amazonaws.com/my-bucket/folder/file.jpg
+      if (host === "s3.amazonaws.com" || /^s3-[a-z0-9-]+\.amazonaws\.com$/.test(host)) {
+        const [bucket, ...rest] = pathname.split("/")
+        // rest.join("/") will be: "folder/file.jpg" (with folders) or "file.jpg" (without folders)
+        const key = decodeURIComponent(rest.join("/"))
+        if (bucket && key) return { bucket, key }
+      }
+
+      return null
+    } catch {
+      return null
+    }
+  }
+  
   testTranslation(): void {
     if (!this.translationText.trim() || this.isTranslating) return
 

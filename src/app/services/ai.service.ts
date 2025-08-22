@@ -16,6 +16,11 @@ import type { AIInsights } from "../models/task.model"
  * 5. Handle error responses and implement retry logic
  * 6. Use AWS SDK for service integrations
  */
+
+export interface ImageLabels {
+  labels: { Name: string; Confidence: string }[];
+}
+
 @Injectable({
   providedIn: "root",
 })
@@ -30,6 +35,14 @@ export class AIService {
   private apiUrl = "https://wnrph10p1c.execute-api.us-east-1.amazonaws.com/Dev"
 
   constructor(private http: HttpClient) {}
+
+
+  analyzeImage(bucket: string, key: string): Observable<ImageLabels> {
+    return this.http.post<ImageLabels>(`${this.apiUrl}/ai/image-analyze`, {
+      bucket,
+      key,
+    }).pipe(catchError(this.handleError))
+  }
 
   /**
    * Analyzes text using AI and returns insights
@@ -85,6 +98,18 @@ export class AIService {
         })
       )
   }
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
 
   /**
    * Translates text to target language
@@ -163,6 +188,8 @@ export class AIService {
       { text },
     ).pipe(catchError(this.handleError))
   }
+
+
 
   private handleError(error: any) {
     console.error('AI Service Error:', error)
