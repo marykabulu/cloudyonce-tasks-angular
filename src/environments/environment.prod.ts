@@ -1,9 +1,8 @@
 export const environment = {
   production: true,
-  apiUrl: '/api', // Use Vercel proxy instead of direct AWS API Gateway
-  enableLogging: true, // Enable logging in production to debug Vercel issues
+  apiUrl: 'https://wnrph10p1c.execute-api.us-east-1.amazonaws.com/Dev',
+  enableLogging: true,
   corsEnabled: true
 };
 
-// Debug logging to verify environment is loaded
 console.log('🌍 Production Environment Loaded:', environment);
