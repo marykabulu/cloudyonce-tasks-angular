@@ -1,9 +1,10 @@
 import { Injectable } from "@angular/core"
-import { HttpClient } from "@angular/common/http"
+import { HttpClient, HttpHeaders } from "@angular/common/http"
 import type { Observable } from "rxjs"
 import { catchError, timeout, map } from "rxjs/operators"
 import { throwError } from "rxjs"
 import type { AIInsights } from "../models/task.model"
+import { environment } from "../../environments/environment"
 
 /**
  * AI Service - Handles all AI-related API calls to the backend
@@ -32,16 +33,34 @@ export class AIService {
   // - Production: "https://your-domain.com" or "https://api.your-domain.com"
   // - Docker: "http://localhost:8000" (if using Docker containers)
   // - AWS API Gateway: "https://[api-id].execute-api.[region].amazonaws.com/[stage]"
-  private apiUrl = "https://wnrph10p1c.execute-api.us-east-1.amazonaws.com/Dev"
+  private apiUrl = environment.apiUrl
 
-  constructor(private http: HttpClient) {}
+  private httpOptions = {
+    headers: new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    })
+  }
+
+  constructor(private http: HttpClient) {
+    if (environment.enableLogging) {
+      console.log('🔧 AI Service initialized with API URL:', this.apiUrl)
+    }
+  }
 
 
   analyzeImage(bucket: string, key: string): Observable<ImageLabels> {
+    if (environment.enableLogging) {
+      console.log('🖼️ AI Service: Analyzing image with bucket:', bucket, 'key:', key)
+    }
+    
     return this.http.post<ImageLabels>(`${this.apiUrl}/ai/image-analyze`, {
       bucket,
       key,
-    }).pipe(catchError(this.handleError))
+    }, this.httpOptions).pipe(
+      timeout(30000), // 30 second timeout for image analysis
+      catchError(this.handleError)
+    )
   }
 
   /**
@@ -59,15 +78,19 @@ export class AIService {
    * - Use CloudWatch for monitoring and logging
    */
   analyzeText(text: string): Observable<AIInsights> {
-    console.log('🔍 AI Service: Analyzing text:', text)
-    console.log('🔍 AI Service: Calling endpoint:', `${this.apiUrl}/ai/analyze`)
-    console.log('🔍 AI Service: Request payload:', { text })
+    if (environment.enableLogging) {
+      console.log('🔍 AI Service: Analyzing text:', text)
+      console.log('🔍 AI Service: Calling endpoint:', `${this.apiUrl}/ai/analyze`)
+      console.log('🔍 AI Service: Request payload:', { text })
+    }
     
-    return this.http.post<any>(`${this.apiUrl}/ai/analyze`, { text })
+    return this.http.post<any>(`${this.apiUrl}/ai/analyze`, { text }, this.httpOptions)
       .pipe(
-        timeout(10000), // 10 second timeout
+        timeout(15000), // 15 second timeout for production
         map((response) => {
-          console.log('🔍 AI Service: Raw response:', response)
+          if (environment.enableLogging) {
+            console.log('🔍 AI Service: Raw response:', response)
+          }
           
           // Transform AWS Comprehend response to expected format
           const transformedResponse: AIInsights = {
@@ -79,20 +102,25 @@ export class AIService {
             summary: `Text analyzed with ${(response.sentiment?.Sentiment || response.Sentiment)?.toLowerCase() || 'neutral'} sentiment`
           }
           
-          console.log('🔍 AI Service: Transformed response:', transformedResponse)
+          if (environment.enableLogging) {
+            console.log('🔍 AI Service: Transformed response:', transformedResponse)
+          }
           return transformedResponse
         }),
         catchError((error) => {
           if (error.name === 'TimeoutError') {
-            console.error('⏰ AI Service: Request timed out after 10 seconds')
+            console.error('⏰ AI Service: Request timed out after 15 seconds')
           } else {
             console.error('❌ AI Service Error in analyzeText:', error)
-            console.error('❌ Error details:', {
-              status: error.status,
-              statusText: error.statusText,
-              message: error.message,
-              url: error.url
-            })
+            if (environment.enableLogging) {
+              console.error('❌ Error details:', {
+                status: error.status,
+                statusText: error.statusText,
+                message: error.message,
+                url: error.url,
+                headers: error.headers
+              })
+            }
           }
           return this.handleError(error)
         })
@@ -193,6 +221,21 @@ export class AIService {
 
   private handleError(error: any) {
     console.error('AI Service Error:', error)
+    
+    // Specific handling for CORS errors on Vercel
+    if (error.status === 0) {
+      console.error('🚨 CORS Error detected - likely API Gateway CORS configuration issue')
+      console.error('🔧 Check AWS API Gateway CORS settings for domain:', window.location.origin)
+    }
+    
+    if (error.status === 403) {
+      console.error('🚨 Forbidden - check API Gateway authentication/authorization')
+    }
+    
+    if (error.status === 502 || error.status === 504) {
+      console.error('🚨 Gateway Error - AWS Lambda may be timing out or failing')
+    }
+    
     return throwError(() => error)
   }
 
