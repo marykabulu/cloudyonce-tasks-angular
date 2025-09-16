@@ -4,3 +4,6 @@ export const environment = {
   enableLogging: true, // Enable logging in production to debug Vercel issues
   corsEnabled: true
 };
+
+// Debug logging to verify environment is loaded
+console.log('🌍 Production Environment Loaded:', environment);
