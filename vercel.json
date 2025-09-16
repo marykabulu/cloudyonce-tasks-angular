@@ -9,14 +9,12 @@
       }
     }
   ],
-  "routes": [
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build:prod",
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "https://wnrph10p1c.execute-api.us-east-1.amazonaws.com/Dev/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/api/(.*)",
+      "destination": "https://wnrph10p1c.execute-api.us-east-1.amazonaws.com/Dev/$1"
     }
   ],
   "headers": [
@@ -55,6 +53,8 @@
       ]
     }
   ],
+  "cleanUrls": true,
+  "trailingSlash": false,
   "env": {
     "NODE_ENV": "production"
   }
