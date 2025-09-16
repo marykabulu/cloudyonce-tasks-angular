@@ -2,15 +2,19 @@ import { Injectable } from "@angular/core"
 import { HttpClient, HttpHeaders } from "@angular/common/http"
 import type { Observable } from "rxjs"
 import { switchMap, map, catchError } from "rxjs/operators"
+import { environment } from "../../environments/environment"
 
 @Injectable({
   providedIn: "root",
 })
 export class FileService {
-  private apiUrl = "https://wnrph10p1c.execute-api.us-east-1.amazonaws.com/Dev"
- // Replace with your API Gateway URL
+  private apiUrl = environment.apiUrl // Use environment configuration
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) {
+    if (environment.enableLogging) {
+      console.log('📁 File Service initialized with API URL:', this.apiUrl)
+    }
+  }
 
   uploadFile(file: File, taskId: string): Observable<{ fileUrl: string; fileName: string }> {
     const fileName = file.name;

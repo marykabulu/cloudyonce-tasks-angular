@@ -2,14 +2,19 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AITestService {
-  private apiUrl = 'https://wnrph10p1c.execute-api.us-east-1.amazonaws.com/Dev';
+  private apiUrl = environment.apiUrl; // Use environment configuration
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) {
+    if (environment.enableLogging) {
+      console.log('🧪 AI Test Service initialized with API URL:', this.apiUrl)
+    }
+  }
 
   /**
    * Test all AI endpoints to verify they're working
