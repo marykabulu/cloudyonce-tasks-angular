@@ -22,12 +22,23 @@ export class FileService {
     
     if (environment.enableLogging) {
       console.log('📁 File Service: Starting upload', { fileName, contentType, taskId, size: file.size });
+      console.log('📁 File Service: API URL:', this.apiUrl);
+      console.log('📁 File Service: Environment:', {
+        production: environment.production,
+        useCorsProxy: environment.useCorsProxy,
+        corsProxyUrl: environment.corsProxyUrl
+      });
     }
     
     return this.http.post<any>(
       `${this.apiUrl}/files`,
       { fileName, contentType, taskId },
-      { headers: new HttpHeaders({ 'Content-Type': 'application/json' }) }
+      { 
+        headers: new HttpHeaders({ 'Content-Type': 'application/json' }),
+        // Add timeout for presigned URL request
+        // @ts-ignore - timeout option exists but TypeScript might not recognize it
+        timeout: 30000
+      }
     ).pipe(
       switchMap((res: any) => {
         if (environment.enableLogging) {
@@ -130,24 +141,34 @@ export class FileService {
       }),
       catchError(error => {
         console.error('❌ Presigned URL generation failed:', error);
+        console.error('❌ Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        
         if (environment.enableLogging) {
           console.error('❌ Error details:', {
             status: error.status,
             statusText: error.statusText,
             message: error.message,
-            url: error.url
+            url: error.url,
+            name: error.name,
+            stack: error.stack
           });
         }
         
         // Provide more specific error messages
-        if (error.status === 0) {
-          throw new Error('Network error - check CORS settings or API Gateway configuration');
+        if (error.status === 0 || error.message?.includes('Failed to fetch')) {
+          const errorMsg = 'Network error - This might be a CORS proxy issue. ';
+          const suggestion = environment.useCorsProxy 
+            ? 'The CORS proxy might be down or blocking the request. Try deploying your own proxy (see CORS_PROXY_SETUP.md)'
+            : 'Check API Gateway CORS settings and ensure it allows requests from GitHub Pages';
+          throw new Error(errorMsg + suggestion);
         } else if (error.status === 403) {
           throw new Error('Access denied - check Lambda IAM permissions for S3');
         } else if (error.status === 404) {
-          throw new Error('Endpoint not found - check API Gateway route configuration');
+          throw new Error('Endpoint not found - check API Gateway route configuration for /files');
+        } else if (error.status === 500 || error.status === 502 || error.status === 503) {
+          throw new Error('Server error - Lambda function might be failing. Check CloudWatch logs');
         } else {
-          throw error;
+          throw new Error(`Presigned URL request failed: ${error.status || 'Unknown'} - ${error.message || 'Network error'}`);
         }
       })
     );
