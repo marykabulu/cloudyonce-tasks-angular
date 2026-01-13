@@ -51,7 +51,15 @@ export class AIService {
 
   analyzeImage(bucket: string, key: string): Observable<ImageLabels> {
     if (environment.enableLogging) {
-      console.log('🖼️ AI Service: Analyzing image with bucket:', bucket, 'key:', key)
+      console.log('🖼️ AI Service: Analyzing image')
+      console.log('🖼️ Bucket:', bucket)
+      console.log('🖼️ Key:', key)
+      console.log('🖼️ Endpoint:', `${this.apiUrl}/ai/image-analyze`)
+    }
+    
+    if (!bucket || !key) {
+      console.error('❌ AI Service: Missing bucket or key for image analysis')
+      return throwError(() => new Error('Bucket and key are required for image analysis'))
     }
     
     return this.http.post<ImageLabels>(`${this.apiUrl}/ai/image-analyze`, {
@@ -59,7 +67,37 @@ export class AIService {
       key,
     }, this.httpOptions).pipe(
       timeout(30000), // 30 second timeout for image analysis
-      catchError(this.handleError)
+      map((response) => {
+        if (environment.enableLogging) {
+          console.log('🖼️ AI Service: Image analysis response:', response)
+        }
+        return response
+      }),
+      catchError((error) => {
+        console.error('❌ AI Service Error in analyzeImage:', error)
+        if (environment.enableLogging) {
+          console.error('❌ Error details:', {
+            status: error.status,
+            statusText: error.statusText,
+            message: error.message,
+            url: error.url,
+            bucket,
+            key
+          })
+        }
+        
+        // Provide more specific error messages
+        if (error.status === 403) {
+          console.error('🚨 Forbidden - Check Lambda IAM permissions for Rekognition and S3 access')
+          console.error('🚨 Verify bucket:', bucket, 'is accessible and Lambda has read permissions')
+        } else if (error.status === 404) {
+          console.error('🚨 Not Found - Check if bucket/key exists:', { bucket, key })
+        } else if (error.name === 'TimeoutError') {
+          console.error('⏰ Timeout - Image analysis took too long (>30s)')
+        }
+        
+        return this.handleError(error)
+      })
     )
   }
 
@@ -154,21 +192,33 @@ export class AIService {
    * - Monitor costs with AWS Cost Explorer
    */
   translateText(text: string, targetLanguage: string): Observable<{ translatedText: string }> {
-    console.log('🌐 AI Service: Translating text:', text)
-    console.log('🌐 AI Service: Target language:', targetLanguage)
-    console.log('🌐 AI Service: Calling endpoint:', `${this.apiUrl}/ai/translate`)
-    console.log('🌐 AI Service: Request payload:', { text, targetLanguage })
+    if (environment.enableLogging) {
+      console.log('🌐 AI Service: Translating text:', text)
+      console.log('🌐 AI Service: Target language:', targetLanguage)
+      console.log('🌐 AI Service: Calling endpoint:', `${this.apiUrl}/ai/translate`)
+      console.log('🌐 AI Service: Request payload:', { text, targetLanguage })
+    }
     
     return this.http.post<{ translatedText: string }>(`${this.apiUrl}/ai/translate`, {
       text,
       targetLanguage,
-    }).pipe(
+    }, this.httpOptions).pipe(
       map((response) => {
-        console.log('🌐 AI Service: Translation response:', response)
+        if (environment.enableLogging) {
+          console.log('🌐 AI Service: Translation response:', response)
+        }
         return response
       }),
       catchError((error) => {
         console.error('❌ AI Service Error in translateText:', error)
+        if (environment.enableLogging) {
+          console.error('❌ Error details:', {
+            status: error.status,
+            statusText: error.statusText,
+            message: error.message,
+            url: error.url
+          })
+        }
         return this.handleError(error)
       })
     )

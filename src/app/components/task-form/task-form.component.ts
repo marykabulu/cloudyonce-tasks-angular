@@ -303,11 +303,15 @@ imageAnalysisError = "";
     this.fileService.uploadFile(file, tempTaskId).subscribe({
       next: ({ fileUrl }) => {
         // 2) Parse S3 URL into bucket/key for Rekognition
+        console.log('📁 Parsing S3 URL:', fileUrl)
         const parsed = this.parseS3UrlToBucketKey(fileUrl)
         if (!parsed) {
-          this.imageAnalysisError = "Could not parse S3 URL"
+          console.error('❌ Failed to parse S3 URL:', fileUrl)
+          this.imageAnalysisError = `Could not parse S3 URL: ${fileUrl}. Please check the URL format.`
           return
         }
+
+        console.log('✅ Parsed S3 URL:', { bucket: parsed.bucket, key: parsed.key })
 
         // 3) Trigger AI image analysis using bucket/key
         this.aiService.analyzeImage(parsed.bucket, parsed.key).subscribe({
@@ -341,7 +345,24 @@ imageAnalysisError = "";
           },
           error: (error) => {
             console.error("Image analysis failed:", error)
-            this.imageAnalysisError = "Failed to analyze image. Please try again."
+            console.error("Error details:", {
+              status: error.status,
+              statusText: error.statusText,
+              message: error.message,
+              bucket: parsed.bucket,
+              key: parsed.key
+            })
+            
+            // Provide more specific error messages
+            if (error.status === 403) {
+              this.imageAnalysisError = "Access denied. Check Lambda IAM permissions for S3 and Rekognition access."
+            } else if (error.status === 404) {
+              this.imageAnalysisError = `Image not found in S3. Bucket: ${parsed.bucket}, Key: ${parsed.key}`
+            } else if (error.status === 0) {
+              this.imageAnalysisError = "CORS error or network issue. Check API Gateway CORS settings."
+            } else {
+              this.imageAnalysisError = `Failed to analyze image (${error.status || 'Unknown error'}). Please try again.`
+            }
           },
         })
       },
