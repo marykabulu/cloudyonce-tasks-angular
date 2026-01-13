@@ -368,7 +368,23 @@ imageAnalysisError = "";
       },
       error: (err) => {
         console.error("File upload failed:", err)
-        this.imageAnalysisError = "Upload failed. Please try again."
+        console.error("Error details:", {
+          message: err.message,
+          error: err
+        })
+        
+        // Provide more specific error messages
+        if (err.message?.includes('Network error')) {
+          this.imageAnalysisError = "Network error. Check your connection and API Gateway CORS settings."
+        } else if (err.message?.includes('Access denied') || err.message?.includes('403')) {
+          this.imageAnalysisError = "Access denied. Check Lambda IAM permissions for S3 access."
+        } else if (err.message?.includes('Invalid presigned URL')) {
+          this.imageAnalysisError = "Failed to get upload URL. Check API Gateway /files endpoint."
+        } else if (err.message?.includes('S3 upload failed')) {
+          this.imageAnalysisError = "S3 upload failed. Check S3 bucket configuration and CORS settings."
+        } else {
+          this.imageAnalysisError = `Upload failed: ${err.message || 'Unknown error'}. Please try again.`
+        }
       },
     })
   }
