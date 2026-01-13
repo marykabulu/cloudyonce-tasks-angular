@@ -1,6 +1,6 @@
 import { Injectable } from "@angular/core"
 import { HttpClient, HttpHeaders } from "@angular/common/http"
-import type { Observable } from "rxjs"
+import { Observable } from "rxjs"
 import { switchMap, map, catchError } from "rxjs/operators"
 import { environment } from "../../environments/environment"
 
@@ -84,7 +84,7 @@ export class FileService {
   
         // Upload to S3 using POST - S3 handles CORS, so don't use httpOptions
         // Use fetch API directly to avoid Angular HTTP interceptor issues with S3
-        return new Observable(observer => {
+        return new Observable<{ fileUrl: string; fileName: string }>(observer => {
           fetch(uploadUrl, {
             method: 'POST',
             body: formData,
@@ -92,11 +92,15 @@ export class FileService {
           })
           .then(response => {
             if (environment.enableLogging) {
+              const headersObj: Record<string, string> = {};
+              response.headers.forEach((value, key) => {
+                headersObj[key] = value;
+              });
               console.log('📥 S3 upload response:', {
                 status: response.status,
                 statusText: response.statusText,
                 ok: response.ok,
-                headers: Object.fromEntries(response.headers.entries())
+                headers: headersObj
               });
             }
             
@@ -107,7 +111,7 @@ export class FileService {
                   statusText: response.statusText,
                   body: text
                 });
-                throw new Error(`S3 upload failed: ${response.status} ${response.statusText}. ${text}`);
+                observer.error(new Error(`S3 upload failed: ${response.status} ${response.statusText}. ${text}`));
               });
             }
             
@@ -116,6 +120,7 @@ export class FileService {
               fileName: fileName
             });
             observer.complete();
+            return;
           })
           .catch(error => {
             console.error('❌ S3 upload error:', error);
