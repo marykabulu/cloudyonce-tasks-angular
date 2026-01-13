@@ -8,6 +8,7 @@
     "build": "ng build",
     "build:fast": "cross-env NODE_ENV=development ng build --configuration development --source-map=false --optimization=false",
     "build:prod": "cross-env NODE_ENV=production ng build --configuration production",
+    "build:gh-pages": "ng build --configuration production --base-href /cloudyonce-tasks-angular/",
     "build:analyze": "ng build --stats-json && npx webpack-bundle-analyzer dist/cloudyonce-tasks-angular/stats.json",
     "watch": "cross-env NODE_ENV=development ng build --watch --configuration development",
     "test": "ng test"

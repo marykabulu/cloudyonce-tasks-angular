@@ -71,6 +71,8 @@ module.exports = {
     'animate-spin',
     // Hover states
     'hover:bg-accent', 'hover:text-foreground', 'hover:bg-primary/90', 'hover:bg-secondary/80',
+    // Cursor utilities
+    'cursor-pointer', 'cursor-not-allowed', 'cursor-default',
     // Line clamp
     'line-clamp-2',
     // Responsive classes

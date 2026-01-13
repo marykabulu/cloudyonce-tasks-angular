@@ -46,6 +46,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  button, a, [role="button"], label {
+    cursor: pointer;
+  }
+  button:disabled, [disabled] {
+    cursor: not-allowed;
+  }
 }
 
 @layer utilities {
